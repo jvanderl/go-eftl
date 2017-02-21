@@ -204,6 +204,14 @@ func GetMessage (conn websocket.Conn) (message []byte, operator int){
 	}
 }
 
+func MessageDetails(message []byte) (text string, destination string, err error) {
+	res := eftlMessage{}
+	if err := json.Unmarshal(message, &res); err != nil {
+		return "","", err
+	}
+	return res.Body.Text, res.Body.Destination, nil
+}
+
 func convert(b []byte) string {
 	n := len(b)
 	return string(b[:n])
