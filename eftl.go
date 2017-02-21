@@ -97,7 +97,7 @@ func Login (conn websocket.Conn, user string, password string) (clientid string,
 		return "", "", err
 	}
 
-	msg, op := eftlGetMessage (conn)
+	msg, op := eftl.GetMessage (conn)
 	switch op {
 		case 2 : { // Login response
 
@@ -154,7 +154,7 @@ func Subscribe (conn websocket.Conn, clientid string, index int, destination str
 		return "", err
 	} 
 
-	msg, op := eftlGetMessage (conn)
+	msg, op := eftl.GetMessage (conn)
 	switch op {
 		case 4 : { // subscription response
     		res := eftlSubscriptionResponse{}
@@ -177,6 +177,7 @@ func GetMessage (conn websocket.Conn) (message []byte, operator int){
 		if err == nil {
 			switch messageType {
 		    	case websocket.TextMessage : {
+		    		var dat map[string]interface{}
 		    		if err := json.Unmarshal(p, &dat); err != nil {
      				   panic(err)
     				}
@@ -201,4 +202,9 @@ func GetMessage (conn websocket.Conn) (message []byte, operator int){
 		    }
 		} 
 	}
+}
+
+func convert(b []byte) string {
+	n := len(b)
+	return string(b[:n])
 }
