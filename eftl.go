@@ -2,13 +2,14 @@ package eftl
 
 import (
 	"github.com/gorilla/websocket"
-//	"github.com/op/go-logging"
+	"github.com/op/go-logging"
 	"encoding/json"
 	"net/url"
-	"context"
+//	"context"
 	"errors"
 	"strconv"
 )
+var log = logging.MustGetLogger("lib-go-eftl")
 
 type eftlGeneric struct {
     element map[string]string
@@ -117,7 +118,7 @@ func Login (conn websocket.Conn, user string, password string) (clientid string,
 
 		}
 		default: {
-			log.Debugf("Other message Received: [%s]", convert(msg))
+//			log.Debugf("Other message Received: [%s]", convert(msg))
 		}
 
 	}
