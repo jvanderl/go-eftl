@@ -97,7 +97,7 @@ func Login (conn websocket.Conn, user string, password string) (clientid string,
 		return "", "", err
 	}
 
-	msg, op := eftl.GetMessage (conn)
+	msg, op := GetMessage (conn)
 	switch op {
 		case 2 : { // Login response
 
@@ -154,7 +154,7 @@ func Subscribe (conn websocket.Conn, clientid string, index int, destination str
 		return "", err
 	} 
 
-	msg, op := eftl.GetMessage (conn)
+	msg, op := GetMessage (conn)
 	switch op {
 		case 4 : { // subscription response
     		res := eftlSubscriptionResponse{}
