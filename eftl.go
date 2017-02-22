@@ -17,7 +17,6 @@ const STATE_CLOSED int = 3
 
 var log = logging.MustGetLogger("lib-go-eftl")
 
-var 
 type eftlConnection struct {
     connectOptions string
     accessPointURL string
