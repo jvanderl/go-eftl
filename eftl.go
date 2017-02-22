@@ -169,29 +169,29 @@ func Login (conn eftlConnection, user string, password string)  (err error){
 func Connect(server string, channel string, options *string) (conn *eftlConnection, err error) {
 
 	//wsURL := url.URL{Scheme: "ws", Host: server, Path: channel}
-	conn := eftConnection{}
-    conn.connectOptions := options
-    conn.accessPointURL := url.URL{Scheme: "ws", Host: server, Path: channel}
-    conn.webSocket websocket.Conn
-    conn.state := STATE_OPENING
-    conn.clientId := nil
-    conn.reconnectToken := nil
-    conn.timeout := 600000
-    conn.heartbeat := 240000
-    conn.maxMessageSize := 0
-    conn.lastMessage := 0
-    conn.timeoutCheck := nil
-    conn.subscriptions := nil
-    conn.sequenceCounter := 0
-    conn.subscriptionCounter := 0
-    conn.reconnectCounter := 0
-    conn.reconnectAttempts := 5
-    conn.reconnectTimer := nil
-    conn.isReconnecting := false
-    conn.isOpen := false
-    conn.qos  := true
-    conn.sendList := nil // todo struct
-    conn.lastSequenceNumber := 0
+	conn = eftConnection{}
+    conn.connectOptions = options
+    conn.accessPointURL = url.URL{Scheme: "ws", Host: server, Path: channel}
+//    conn.webSocket = nil
+    conn.state = STATE_OPENING
+    conn.clientId = nil
+    conn.reconnectToken = nil
+    conn.timeout = 600000
+    conn.heartbeat = 240000
+    conn.maxMessageSize = 0
+    conn.lastMessage = 0
+    conn.timeoutCheck = nil
+    conn.subscriptions = nil
+    conn.sequenceCounter = 0
+    conn.subscriptionCounter = 0
+    conn.reconnectCounter = 0
+    conn.reconnectAttempts = 5
+    conn.reconnectTimer = nil
+    conn.isReconnecting = false
+    conn.isOpen = false
+    conn.qos = true
+    conn.sendList = nil // todo struct
+    conn.lastSequenceNumber = 0
 	conn.webSocket, _, err = websocket.DefaultDialer.Dial(wsURL.String(), nil)
 	if err != nil {
 		return nil, err
