@@ -2,25 +2,48 @@ package eftl
 
 import (
 	"github.com/gorilla/websocket"
-	"github.com/op/go-logging"
 	"encoding/json"
 	"net/url"
-//	"context"
 	"errors"
 	"strconv"
 )
+
+const STATE_OPENING int = 0
+const STATE_OPEN int = 1
+const STATE_CLOSING int = 2
+const STATE_CLOSED int = 3
+
+
+
 var log = logging.MustGetLogger("lib-go-eftl")
 
-type eftlGeneric struct {
-    element map[string]string
+var 
+type eftlConnection struct {
+    connectOptions string
+    accessPointURL string
+    webSocket websocket.Conn
+    state int
+    clientId string
+    reconnectToken string
+    timeout int
+    heartbeat int
+    maxMessageSize int
+    lastMessage int
+    timeoutCheck int
+    subscriptions map[string]string //todo struct
+    sequenceCounter int
+    subscriptionCounter int
+    reconnectCounter int
+    reconnectAttempts int
+    reconnectTimer int
+    isReconnecting bool
+    isOpen bool
+    qos bool
+    sendList map[string]string // todo struct
+    lastSequenceNumber int
 }
-// {"op": 1, "client_type": "js", "client_version": "3.1.0   V7", "user":"user", "password":"password", "login_options": {"_qos": "true"}}
 
-
-//type eftlLoginOptions struct {
-//	_qos *bool
-//}
-type eftlLoginMessage struct {
+type eftlLoginRequest struct {
 	Operator int  `json:"op"`
 	ClientType string `json:"client_type"`
 	ClientVersion string `json:"client_version"`
@@ -28,8 +51,6 @@ type eftlLoginMessage struct {
 	Password string `json:"password"`
 	LoginOptions map[string]string `json:"login_options"`
 }
-
-// {"op":2,"client_id":"68404BBF-8831-42CD-8744-43385AEF3590","id_token":"ZkGGc24IVFacA9jIGOBgb2bDc2g=","timeout":600,"heartbeat":240,"max_size":8192,"_qos":"true"}
 
 type eftlLoginResponse struct {
 	Operator int  `json:"op"`
@@ -41,15 +62,12 @@ type eftlLoginResponse struct {
 	QoS string `json:"_qos"`
 }
 
-// {"op":3,"id":"68404BBF-8831-42CD-8744-43385AEF3590.s.1","matcher":"{\"_dest\":\"sample\"}"}
 
-type eftlSubscription struct {
+type eftlSubscriptionRequest struct {
 	Operator int  `json:"op"`
 	ClientID string `json:"id"`	
 	Matcher string `json:"matcher"`
 }
-
-// {"op":4,"id":"68404BBF-8831-42CD-8744-43385AEF3590.s.1"}
 
 type eftlSubscriptionResponse struct {
 	Operator int  `json:"op"`
@@ -57,92 +75,145 @@ type eftlSubscriptionResponse struct {
 }
 
 
-// {"op":7,"to":"68404BBF-8831-42CD-8744-43385AEF3590.s.1","seq":1,"body":{"_dest":"sample","text":"This is a sample eFTL message","number":1}}
-
 type eftlBody struct {
 	Destination string `json:"_dest"`
 	Text string `json:"text"`
 	Number int `json:"number"`
 }
 
-type eftlMessage struct {
+type eftlInboundMessage struct {
 	Operator int  `json:"op"`
 	To string `json:"to"`
 	Sequence int `json:"seq"`
 	Body eftlBody `json:"body"`
 } 
 
-// {"op":9,"seq":1}
+type eftlOutboundMessage struct {
+	Operator int  `json:"op"`
+	Body eftlBody `json:"body"`
+	Sequence int `json:"seq"`
+} 
 
-type eftlSequenceMsg struct {
+type eftlAckMsg struct {
 	Operator int  `json:"op"`
 	Sequence int `json:"seq"`
 }
 
-func Login (conn websocket.Conn, user string, password string) (clientid string, idtoken string, err error){
+type eftlSubsctiption struct {
+	SubscriptionID string
+
+}
+
+func Login (conn eftlConnection, user string, password string)  (err error){
 	
-	loginMessage := eftlLoginMessage{1, "js", "3.1.0   V7", user, password, map[string]string{"_qos": "true"}}
+	loginMessage := eftlLoginRequest{1, "js", "3.1.0   V7", user, password, map[string]string{"_qos": "true"}}
 
 	loginb, err := json.Marshal(loginMessage)
 	if err != nil {
-		log.Debugf("Error while marshalling login message: [%s]", err)
+		return err
+	}
+	
+	err = conn.webSocket.WriteMessage(websocket.TextMessage, loginb)
+	if err != nil {
+		return err
+	}
+
+	msg, op := GetMessage (conn.webSocket)
+	switch op {
+		case 2 : { // Login response
+    		res := new(eftlLoginResponse)
+		    if err := json.Unmarshal(msg, &res); err != nil {
+				return err
+			}
+			conn.clientId := res.ClientID
+			conn.reconnectToken := res.IDToken 
+			return nil
+		}
+		default: {
+		}
+	}
+	err = errors.New("No login response received")
+	return err
+}
+
+/*func Login (conn websocket.Conn, user string, password string) (clientid string, idtoken string, err error){
+	
+	loginMessage := eftlLoginRequest{1, "js", "3.1.0   V7", user, password, map[string]string{"_qos": "true"}}
+
+	loginb, err := json.Marshal(loginMessage)
+	if err != nil {
 		return "", "", err
 	}
 	
-	log.Debug("Sending login message")
-
 	err = conn.WriteMessage(websocket.TextMessage, loginb)
 	if err != nil {
-		log.Debugf("Error while sending login message to wsHost: [%s]", err)
 		return "", "", err
 	}
 
 	msg, op := GetMessage (conn)
 	switch op {
 		case 2 : { // Login response
-
-
-			// {"op":2,"client_id":"68404BBF-8831-42CD-8744-43385AEF3590","id_token":"ZkGGc24IVFacA9jIGOBgb2bDc2g=","timeout":600,"heartbeat":240,"max_size":8192,"_qos":"true"}
     		res := new(eftlLoginResponse)
 		    if err := json.Unmarshal(msg, &res); err != nil {
 				return "", "", err
 			}
-//							log.Debug("Login Response Received: [%s]", convert(p))
-//				wsClientID = res.ClientID
-//				wsIDToken = res.IDToken
-//				log.Debugf("Login Succesful. client_id: [%s], id_token: [%s]", wsClientID, wsIDToken)
-//							log.Debug("client_id:", wsClientID)
-//							log.Debug("id_token:", wsIDToken)
 			return res.ClientID, res.IDToken, nil
-
-
 		}
 		default: {
-//			log.Debugf("Other message Received: [%s]", convert(msg))
 		}
-
 	}
-
 	err = errors.New("No login response received")
 	return "", "", err
 }
+*/
 
-func Connect(server string, channel string) (conn *websocket.Conn, err error) {
+func Connect(server string, channel string, options *string) (conn *eftlConnection, err error) {
 
-	wsURL := url.URL{Scheme: "ws", Host: server, Path: channel}
-	log.Debugf("connecting to %s", wsURL.String())
-
-	conn, _, err = websocket.DefaultDialer.Dial(wsURL.String(), nil)
+	//wsURL := url.URL{Scheme: "ws", Host: server, Path: channel}
+	conn := eftConnection{}
+    conn.connectOptions := options
+    conn.accessPointURL := url.URL{Scheme: "ws", Host: server, Path: channel}
+    conn.webSocket websocket.Conn
+    conn.state := STATE_OPENING
+    conn.clientId := nil
+    conn.reconnectToken := nil
+    conn.timeout := 600000
+    conn.heartbeat := 240000
+    conn.maxMessageSize := 0
+    conn.lastMessage := 0
+    conn.timeoutCheck := nil
+    conn.subscriptions := nil
+    conn.sequenceCounter := 0
+    conn.subscriptionCounter := 0
+    conn.reconnectCounter := 0
+    conn.reconnectAttempts := 5
+    conn.reconnectTimer := nil
+    conn.isReconnecting := false
+    conn.isOpen := false
+    conn.qos  := true
+    conn.sendList := nil // todo struct
+    conn.lastSequenceNumber := 0
+	conn.webSocket, _, err = websocket.DefaultDialer.Dial(wsURL.String(), nil)
 	if err != nil {
-//		log.Debugf("Error while dialing to wsHost: ", err)
 		return nil, err
 	}
 	return conn, nil
 }
 
+/*func Connect(server string, channel string) (conn *websocket.Conn, err error) {
+
+	wsURL := url.URL{Scheme: "ws", Host: server, Path: channel}
+
+	conn, _, err = websocket.DefaultDialer.Dial(wsURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}*/
+
 func Subscribe (conn websocket.Conn, clientid string, index int, destination string) (subscriptionid string, err error){
 
-	subscriptionMessage := eftlSubscription{3, clientid + ".s." + strconv.Itoa(index) + "", "{\"_dest\":\"" + destination + "\"}"}
+	subscriptionMessage := eftlSubscriptionRequest{3, clientid + ".s." + strconv.Itoa(index) + "", "{\"_dest\":\"" + destination + "\"}"}
 
 	subscrb, err := json.Marshal(subscriptionMessage)
 	if err != nil {
@@ -164,7 +235,6 @@ func Subscribe (conn websocket.Conn, clientid string, index int, destination str
 			return res.SubscriptionID, nil
 		}
 		default: {
-			log.Debugf("Other message Received: [%s]", convert(msg))
 		}
 	}
 	err = errors.New("No subscription response received")
@@ -187,25 +257,27 @@ func GetMessage (conn websocket.Conn) (message []byte, operator int){
     				}
 		    	}
 		    	case websocket.BinaryMessage : {
-//		    		log.Debug("Received Binary message", p)
 		    	}
 		    	case websocket.CloseMessage : {
-//		    		log.Debug("Received Close message", p)
-		    		//return nil
 		    	}
 		    	case websocket.PingMessage : {
-//		    		log.Debug("Received Ping message", p)
 		    	}
 		    	case websocket.PongMessage : {
-//		    		log.Debug("Received Pong message", p)
 		    	}
 		    }
 		} 
 	}
 }
 
+func SendMessage (conn websocket.Conn, message string, destination string)
+	res := eftlOutboundMessage{}
+	res.Operator := 8
+	res.Body.Destination := destination
+	res.Body.Text := message
+
+
 func MessageDetails(message []byte) (text string, destination string, err error) {
-	res := eftlMessage{}
+	res := eftlInboundMessage{}
 	if err := json.Unmarshal(message, &res); err != nil {
 		return "","", err
 	}
