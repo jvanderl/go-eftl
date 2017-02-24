@@ -1,5 +1,4 @@
 package eftl
-package eftl
 
 import (
 	"github.com/gorilla/websocket"
