@@ -15,6 +15,7 @@ const STATE_CLOSED int = 3
 
 const EFTL_VERSION = "3.1.0   V7"
 const EFTL_WS_PROTOCOL = "v1.eftl.tibco.com"
+
 const OP_HEARTBEAT = 0
 const OP_LOGIN = 1
 const OP_WELCOME = 2
@@ -28,6 +29,7 @@ const OP_ACK = 9
 const OP_ERROR = 10
 const OP_DISCONNECT = 11
 const OP_GOODBYE = 12
+
 const SUBSCRIPTION_TYPE = ".s."
 
 
@@ -43,7 +45,7 @@ type Connection struct {
     MaxMessageSize int
     LastMessage int
     TimeoutCheck int
-    Subscriptions []Subscription //todo struct
+    Subscriptions []Subscription
     SequenceCounter int
     SubscriptionCounter int
     ReconnectCounter int
@@ -236,7 +238,25 @@ func (conn *Connection) Subscribe (matcher string, durable string) (subscription
 	return "", err
 }
 
-func (conn *Connection) GetMessage () (message []byte, operator int){
+func (conn *Connection) ReceiveMessage() (message string, destination string, err error) {
+	for {
+		msg, op := conn.GetMessage()
+		switch op {
+			case OP_HEARTBEAT : { //Heartbeat
+			}
+			case OP_EVENT : { // Regular Message
+				message, destination, err := MessageDetails(msg)
+				if err == nil {
+					return message, destination, nil
+				}
+			}
+			default : { // unknown
+			}
+		}
+	}
+}
+
+func (conn *Connection) GetMessage() (message []byte, operator int){
 	for {
 		messageType, p, err := conn.WebSocket.ReadMessage()
 		if err == nil {
