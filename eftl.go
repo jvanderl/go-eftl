@@ -6,7 +6,11 @@ import (
 	"net/url"
 	"errors"
 	"strconv"
+//	"github.com/op/go-logging"
 )
+
+// log is the default package logger
+//var log = logging.MustGetLogger("activity-eftl-golib")
 
 const STATE_OPENING int = 0
 const STATE_OPEN int = 1
@@ -170,8 +174,10 @@ func (conn *Connection) Login (user string, password string)  (err error){
 	if err != nil {
 		return err
 	}
-
-	msg, op := conn.GetMessage()
+	msg, op, err := conn.GetMessage()
+	if err != nil {
+		return err
+	}
 	switch op {
 		case OP_WELCOME : { 
     		res := eftlLoginResponse{}
@@ -188,6 +194,8 @@ func (conn *Connection) Login (user string, password string)  (err error){
 			return nil
 		}
 		default: {
+			err = errors.New("Other Message" + convert(msg))
+			return err
 		}
 	}
 	err = errors.New("No login response received")
@@ -213,7 +221,10 @@ func (conn *Connection) Subscribe (matcher string, durable string) (subscription
 		return "", err
 	}
 
-	msg, op := conn.GetMessage()
+	msg, op, err := conn.GetMessage()
+	if err != nil {
+		return "", err
+	}
 	switch op {
 		case OP_SUBSCRIBED : { // subscription response
     		res := eftlSubscriptionResponse{}
@@ -240,7 +251,10 @@ func (conn *Connection) Subscribe (matcher string, durable string) (subscription
 
 func (conn *Connection) ReceiveMessage() (message string, destination string, err error) {
 	for {
-		msg, op := conn.GetMessage()
+		msg, op, err := conn.GetMessage()
+		if err != nil {
+			return "", "", err
+		}
 		switch op {
 			case OP_HEARTBEAT : { //Heartbeat
 			}
@@ -256,7 +270,7 @@ func (conn *Connection) ReceiveMessage() (message string, destination string, er
 	}
 }
 
-func (conn *Connection) GetMessage() (message []byte, operator int){
+func (conn *Connection) GetMessage() (message []byte, operator int, err error){
 	for {
 		messageType, p, err := conn.WebSocket.ReadMessage()
 		if err == nil {
@@ -264,23 +278,30 @@ func (conn *Connection) GetMessage() (message []byte, operator int){
 		    	case websocket.TextMessage : {
 		    		var dat map[string]interface{}
 		    		if err := json.Unmarshal(p, &dat); err != nil {
-     				   panic(err)
+     				   return nil, 0, err
     				}
     				eftlOp := dat["op"].(float64)
     				if eftlOp != 0 { //Skip Heartbeat
-    					return p, int(eftlOp)
+    					return p, int(eftlOp), nil
     				}
 		    	}
 		    	case websocket.BinaryMessage : {
+		    		err = errors.New("Binary message received")
+		    		return nil, 0, err
 		    	}
 		    	case websocket.CloseMessage : {
+		    		err = errors.New("Close message received")
+		    		return nil, 0, err
 		    	}
 		    	case websocket.PingMessage : {
 		    	}
 		    	case websocket.PongMessage : {
 		    	}
 		    }
-		} 
+		} else { 
+			return nil, 0, err
+		}
+
 	}
 }
 
