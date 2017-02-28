@@ -6,11 +6,13 @@ import (
 	"net/url"
 	"errors"
 	"strconv"
-//	"github.com/op/go-logging"
+	"crypto/x509"
+	"crypto/tls"
+	"github.com/op/go-logging"
 )
 
 // log is the default package logger
-//var log = logging.MustGetLogger("activity-eftl-golib")
+var log = logging.MustGetLogger("activity-eftl-golib")
 
 const STATE_OPENING int = 0
 const STATE_OPEN int = 1
@@ -130,10 +132,15 @@ type Subscription struct {
 	Pending bool `json:"pending"`
 }
 
-func Connect(server string, channel string, options string) (conn Connection, err error) {
+func Connect(server string, channel string, secure bool, cert string,  options string) (conn Connection, err error) {
 
-	wsURL := url.URL{Scheme: "ws", Host: server, Path: channel}
 
+	wsURL := url.URL{}
+	if secure {
+		wsURL = url.URL{Scheme: "wss", Host: server, Path: channel}
+	} else {		
+		wsURL = url.URL{Scheme: "ws", Host: server, Path: channel}
+	}
 	// init eftlConnection
     conn.ConnectOptions = options
     conn.AccessPointURL = wsURL.String()
@@ -153,9 +160,22 @@ func Connect(server string, channel string, options string) (conn Connection, er
     conn.LastSequenceNumber = 0
 
     // Connect to eftl Server
-	conn.WebSocket, _, err = websocket.DefaultDialer.Dial(conn.AccessPointURL, nil)
-	if err != nil {
-		return conn, err
+    if secure {
+    	dialer := websocket.Dialer{}
+    	tlsConfig := tls.Config{}
+    	certs := x509.NewCertPool()
+    	certs.AppendCertsFromPEM([]byte(cert))
+    	tlsConfig.RootCAs = certs
+    	dialer.TLSClientConfig = &tlsConfig
+		conn.WebSocket, _, err = dialer.Dial(conn.AccessPointURL, nil)
+		if err != nil {
+			return conn, err
+		}
+	} else {
+		conn.WebSocket, _, err = websocket.DefaultDialer.Dial(conn.AccessPointURL, nil)
+		if err != nil {
+			return conn, err
+		}
 	}
 	return conn, nil
 }
