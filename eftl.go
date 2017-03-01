@@ -8,11 +8,12 @@ import (
 	"strconv"
 	"crypto/x509"
 	"crypto/tls"
-	"github.com/op/go-logging"
+	"encoding/base64"
+//	"github.com/op/go-logging"
 )
 
 // log is the default package logger
-var log = logging.MustGetLogger("activity-eftl-golib")
+//var log = logging.MustGetLogger("activity-eftl-golib")
 
 const STATE_OPENING int = 0
 const STATE_OPEN int = 1
@@ -164,9 +165,12 @@ func Connect(server string, channel string, secure bool, cert string,  options s
     	dialer := websocket.Dialer{}
     	tlsConfig := tls.Config{}
     	certs := x509.NewCertPool()
-    	certs.AppendCertsFromPEM([]byte(cert))
-    	tlsConfig.RootCAs = certs
-    	dialer.TLSClientConfig = &tlsConfig
+    	decodedCert, _ := base64.StdEncoding.DecodeString(cert)
+		if err == nil {
+	    	certs.AppendCertsFromPEM([]byte(decodedCert))
+	    	tlsConfig.RootCAs = certs
+	    	dialer.TLSClientConfig = &tlsConfig
+		}
 		conn.WebSocket, _, err = dialer.Dial(conn.AccessPointURL, nil)
 		if err != nil {
 			return conn, err
